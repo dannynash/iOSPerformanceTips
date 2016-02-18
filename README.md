@@ -238,24 +238,24 @@ view.layer.shadowPath = [[UIBezierPath bezierPathWithRect:view.bounds] CGPath];
 ###20.最佳化Table views
 Table view需要支援很快速的scroll，如果沒有把效能挑整好，使用者很容易發現lag的情形。
 所以在實現table view時要謹記
-－ 透過正確reuseIdentifier重複使用cell（前面有提過）
-－ 盡可能設定views不透明
-－ 避免漸層，放大/縮小圖片，還有在off-screen的設計。
-－ cache 寬高的資訊，如果他們都是一樣的話。
-－ 如果這些cell使來自於網路，確定是使用非同步方法來操作，並且記得cache這些網路回應。
-－ 使用shadow path，如果需要的話
-－ 減少subview使用的數量
-－ 在cellForRowAtIndexPath:盡可能做最少的運算，如果有需要的話在一開始運算完之後cache起來。
-－ 使用正確的資料結構。
-－ 直接設定rowHeight, sectionFooterHeight, sectionHeaderHeight。而不透過delegate
+- 透過正確reuseIdentifier重複使用cell（前面有提過）
+- 盡可能設定views不透明
+- 避免漸層，放大/縮小圖片，還有在off-screen的設計。
+- cache 寬高的資訊，如果他們都是一樣的話。
+- 如果這些cell使來自於網路，確定是使用非同步方法來操作，並且記得cache這些網路回應。
+- 使用shadow path，如果需要的話
+- 減少subview使用的數量
+- 在cellForRowAtIndexPath:盡可能做最少的運算，如果有需要的話在一開始運算完之後cache起來。
+- 使用正確的資料結構。
+- 直接設定rowHeight, sectionFooterHeight, sectionHeaderHeight。而不透過delegate
 
 ###21.使用正確的資料儲存方式
 當需要讀寫大量資料的時候，可以使用多種方式：
-－ 存在NSUserDefaults
-－ 使用XML/JSON/Plist的檔案格式儲存
-－ 使用NSCoding
-－ 使用本機的SQL database
-－ 使用Core data
+- 存在NSUserDefaults
+- 使用XML/JSON/Plist的檔案格式儲存
+- 使用NSCoding
+- 使用本機的SQL database
+- 使用Core data
 
 操作NSUserDefaults很簡單，很適合拿來儲存小量的資料，如使用者偏好的設定。
 使用XML/JSON/Plist檔案，會帶來幾個問題。一般來說，需要把整個檔案都載入到記憶體之後再進行操作，這顯得很沒有效率。當然可以使用前面提過的SAX處理XML檔案，但這是個複雜的方法。
