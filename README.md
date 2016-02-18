@@ -206,3 +206,108 @@ UIWebView是很好用的設計，可以很容易的為我們顯示網頁上的�
 
 [WWDC 2012 session #601 – Optimizing Web Content in UIWebViews and Websites on iOS.](http://developer.apple.com/videos/wwdc/2012/)
 
+###19.設定Shadow Path
+如果你需要在view或是layer上面增加視覺陰影效果，直覺上會使用QuartzCore framework
+```
+#import <QuartzCore/QuartzCore.h>
+
+// Somewhere later ...
+UIView *view = [[UIView alloc] init];
+
+// Setup the shadow ...
+view.layer.shadowOffset = CGSizeMake(-1.0f, 1.0f);
+view.layer.shadowRadius = 5.0f;
+view.layer.shadowOpacity = 0.6;
+
+```
+雖然很簡潔，但有個嚴重的問題。Core Animation裡面使用的(offscreen pass)相當吃系統資源。
+（offscreen pass是Core Animation instrument定義的運算，雖然是使用硬體執行，但會中斷原本硬體的運算，重新指向要計算的buffer，完成offscreen運算之後，再導回之前處理的buffer。似乎在on-screen/ off-screen之間的context switch會導致系統緩慢。[參考文章](https://forums.developer.apple.com/thread/12257)）
+
+不過有個更好的選項：設定Shadow Path！
+
+```
+view.layer.shadowPath = [[UIBezierPath bezierPathWithRect:view.bounds] CGPath];
+```
+透過設定Shadow Path，OS不需要一再重新計算如何畫出陰影。而是使用自己預先設定好的路徑。
+但這取決於這個view的格式，自己計算path有時候可能更加困難。
+另外一個問題是在每次view的frame改變時，都需要重新更新Shadow Path.
+
+[這篇文章](http://markpospesel.wordpress.com/2012/04/03/on-the-importance-of-setting-shadowpath/)裡面有更多關於這個技術的討論。
+
+
+###20.最佳化Table views
+Table view需要支援很快速的scroll，如果沒有把效能挑整好，使用者很容易發現lag的情形。
+所以在實現table view時要謹記
+－ 透過正確reuseIdentifier重複使用cell（前面有提過）
+－ 盡可能設定views不透明
+－ 避免漸層，放大/縮小圖片，還有在off-screen的設計。
+－ cache 寬高的資訊，如果他們都是一樣的話。
+－ 如果這些cell使來自於網路，確定是使用非同步方法來操作，並且記得cache這些網路回應。
+－ 使用shadow path，如果需要的話
+－ 減少subview使用的數量
+－ 在cellForRowAtIndexPath:盡可能做最少的運算，如果有需要的話在一開始運算完之後cache起來。
+－ 使用正確的資料結構。
+－ 直接設定rowHeight, sectionFooterHeight, sectionHeaderHeight。而不透過delegate
+
+###21.使用正確的資料儲存方式
+當需要讀寫大量資料的時候，可以使用多種方式：
+－ 存在NSUserDefaults
+－ 使用XML/JSON/Plist的檔案格式儲存
+－ 使用NSCoding
+－ 使用本機的SQL database
+－ 使用Core data
+
+操作NSUserDefaults很簡單，很適合拿來儲存小量的資料，如使用者偏好的設定。
+使用XML/JSON/Plist檔案，會帶來幾個問題。一般來說，需要把整個檔案都載入到記憶體之後再進行操作，這顯得很沒有效率。當然可以使用前面提過的SAX處理XML檔案，但這是個複雜的方法。
+NSCoding也是需要操作檔案，與前面一個方式會遇到差不多的問題。
+最適合的選項是SQLite或是Core Data。透過這兩者，可以使用最佳化過的query方式拿到想要的物件，而這兩個方式的效能很相近。
+Core Data是官方推薦的資料庫，至於內容博大精深，這邊不做詳述。如果使用SQLite的話可以用[FMDB](https://github.com/ccgus/fmdb)避免掉底層的語法操作。
+
+## 進階最佳化
+###22.加速App launch時間
+App launch時間很重要，這是給使用者帶來的第一印象。
+要加速這個流程，盡可能使用非同步的方式進行任務，如網路傳輸，資料庫存取，或是爬一些資料等等。
+避免使用過度複雜的XIBs，因為載入這些XIB都是在main thread執行。（但是storyboard沒有這個問題）
+
+！watchdog在debug模式底下不會執行，測試時別忘記解開iphone/ipad與xcode的連結，才能真正知道launch時的速度。
+
+###23.使用Autorelease Pool
+NSAutoreleasePool可以用在block中釋放物件。而它也會自動被UIKit呼叫。但是在某些情境下，手動使用NSAutoreleasePool可以帶來一些好處。
+
+如果在程式執行的某個時候，需要短暫建立大量的物件，如果這些大量資料在之後不需要使用到的話，其實是可以被提早釋放的。不需要等到UIKit進行回收時才開始回收這些記憶體。
+```
+NSArray *urls = <# An array of file URLs #>;
+for (NSURL *url in urls) {
+    @autoreleasepool {
+        NSError *error;
+        NSString *fileContents = [NSString stringWithContentsOfURL:url
+        encoding:NSUTF8StringEncoding error:&error];
+        /* Process the string, creating and autoreleasing more objects. */
+    }
+}
+```
+
+###24.Cache圖片，或不這麼做
+有兩個方法可以載入bundle裡面的圖片，imageNamed跟比較不常見的imageWithContentsOfFile
+imageNamed優點是會cache這張圖片，當使用這個函式，會先在cache裡面找符合這個名稱的圖片。如果沒有的話在從bundle裡面載入到cache，再回傳。
+而imageWithContentsOfFile就不會進行cache。
+那什麼時候該使用哪個函式呢？
+如果今天是要載入一個很大的圖片，而之後就不會在重複使用的話，那就沒有cache的必要。imageWithContentsOfFile會是比較好的選擇。
+imageNamed則可以用在會重複使用的圖片上，可以省下再次載入需要的時間。
+
+###25.盡可能避免Date Formatters
+
+如果有很多date格式需要使用NSDateFormatter，那得小心處理。如同前面提過的，盡量重複使用NSDateFormatter這個物件。
+然而，如果想要更進一步加速的話，可以直接使用C取代NSDateFormatter。Sam Soffes寫了一篇[部落格](http://soff.es/how-to-drastically-improve-your-app-with-an-afternoon-and-instruments)，可以直接使用他提供的代碼來取代NSDateFormatter。
+
+聽起來很棒，但還有更好的方式！
+如果你可以控制時間的格式的話，選擇Unix timestamps。Unix timestamps使用整數來計算時間，可以被簡單的轉成NSDate
+```
+- (NSDate*)dateFromUnixTimestamp:(NSTimeInterval)timestamp {
+    return [NSDate dateWithTimeIntervalSince1970:timestamp];
+}
+```
+這甚至比前面提過的C function還快
+特別注意web傳過來的timestamps是milliseconds，原生javascript很常這麼做。記得先除過１０００轉換成秒之後再進行運算。
+
+
